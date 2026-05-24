@@ -1,0 +1,41 @@
+flowchart LR
+  U(["User"]) --> UI["Streamlit UI<br/>app.py"]
+  UI --> H["Chat History<br/>st.session_state -> build_agent_messages"]
+
+  subgraph A["Agent (library-agent)"]
+    direction LR
+
+    subgraph Core["Orchestration Layer"]
+      O["LibraryAgent + Runner<br/>orchestration/agent.py"]
+      L["Per-turn loop:<br/>Question -> Think -> Tool Call -> Observe -> Final Answer"]
+    end
+
+    M["Model<br/>model/llm.py<br/>SYSTEM_PROMPT + OPENAI_MODEL"]
+
+    subgraph Tools["Tools"]
+      T1["search_haw_books_tool"]
+      T2["lookup_library_info_tool"]
+    end
+
+    O --> M
+    M --> L
+    M -. tool call .-> T1
+    M -. tool call .-> T2
+    T1 --> O
+    T2 --> O
+  end
+
+  H --> O
+
+  T1 --> SRU["SRU Catalog API<br/>sru.k10plus.de/opac-de-18-302"]
+  T1 --> AV["Availability API<br/>kataloge.hh.gbv.de/LBS_WS/availability/titleinfo"]
+
+  T2 --> VDB["ChromaDB<br/>knowledge/vector_store.py"]
+
+  C["crawler.py (HIBS crawl)"] --> CORPUS["data/corpus/*.md"]
+  CORPUS --> SEED["seed_chroma.py"]
+  SEED --> VDB
+
+  O --> UI
+  UI --> R["Natural-language answer<br/>+ book table + tool traces"]
+  R --> U
