@@ -10,7 +10,7 @@ Students should keep the architecture and replace the domain:
 - Replace or extend the knowledge source in `knowledge/crawler.py`.
 - Run `make run-fresh` to rebuild the corpus and vector database.
 
-Good exercise target: create an agent for a different university service, conference website, course FAQ, or public office website.
+Advanced: create an agent for a different purpose, e.g. university service, conference website, course FAQ, or public office website
 
 ## Some useful APIs
 Recipe: https://www.themealdb.com/api.php
