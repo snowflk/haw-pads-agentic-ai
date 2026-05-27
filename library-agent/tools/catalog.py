@@ -55,7 +55,8 @@ def search_haw_books_advanced(
     if enrich_availability:
         for book in books:
             if book.ppn:
-                book.availability = get_availability_by_ppn(book.ppn)
+                book.availability_copies = get_availability_copies_by_ppn(book.ppn)
+                book.availability = book.availability_copies[0] if book.availability_copies else None
     return books
 
 
@@ -124,6 +125,11 @@ def _tokenize(text: str) -> set[str]:
 
 
 def get_availability_by_ppn(ppn: str) -> AvailabilityInfo | None:
+    copies = get_availability_copies_by_ppn(ppn)
+    return copies[0] if copies else None
+
+
+def get_availability_copies_by_ppn(ppn: str) -> list[AvailabilityInfo]:
     params = {"BES": "2", "LAN": "DU", "USR": "1034", "PPN": ppn}
     headers = {"Accept": "application/json"}
     response = requests.get(AVAILABILITY_URL, params=params, headers=headers, timeout=20)
@@ -135,44 +141,8 @@ def get_availability_by_ppn(ppn: str) -> AvailabilityInfo | None:
         raise CatalogError(f"Failed to parse availability response as JSON: {exc}") from exc
 
     copy_raw: Any = payload.get("copies", {}).get("copy")
-    if isinstance(copy_raw, list):
-        copy_obj = copy_raw[0] if copy_raw else None
-    elif isinstance(copy_raw, dict):
-        copy_obj = copy_raw
-    else:
-        copy_obj = None
-
-    if not isinstance(copy_obj, dict):
-        return None
-
-    volume_raw: Any = copy_obj.get("volumes", {}).get("volume", {})
-    if isinstance(volume_raw, list):
-        volume_obj = volume_raw[0] if volume_raw else {}
-    elif isinstance(volume_raw, dict):
-        volume_obj = volume_raw
-    else:
-        volume_obj = {}
-
-    messages_raw: Any = copy_obj.get("messages", {}).get("message")
-    if isinstance(messages_raw, list):
-        messages = " | ".join(str(m) for m in messages_raw)
-    elif messages_raw is None:
-        messages = None
-    else:
-        messages = str(messages_raw)
-
-    loan_status_raw = volume_obj.get("loanstatus")
-    loan_status = str(loan_status_raw) if loan_status_raw is not None else messages
-
-    return AvailabilityInfo(
-        location=_as_str(copy_obj.get("location")),
-        shelfmark=_as_str(copy_obj.get("shelfmark")),
-        loan_indication=_as_str(copy_obj.get("loanindication")),
-        loan_status=loan_status,
-        description=_as_str(copy_obj.get("description")),
-        action_description=_as_str(copy_obj.get("actionDescription")),
-        action_url=_as_str(copy_obj.get("actionurl")),
-    )
+    copies = _as_dict_list(copy_raw)
+    return [availability for copy_obj in copies for availability in _parse_copy_availability(copy_obj)]
 
 
 def _parse_picaxml_record(record_node: ET.Element) -> BookRecord | None:
@@ -268,6 +238,51 @@ def _as_str(value: Any) -> str | None:
     return str(value)
 
 
+def _as_dict_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def _parse_copy_availability(copy_obj: dict[str, Any]) -> list[AvailabilityInfo]:
+    volume_raw: Any = copy_obj.get("volumes", {}).get("volume", {})
+    volumes = _as_dict_list(volume_raw)
+    if not volumes:
+        volumes = [{}]
+
+    rows: list[AvailabilityInfo] = []
+    for volume_obj in volumes:
+        copy_messages = _messages_to_text(copy_obj.get("messages", {}).get("message"))
+        volume_messages = _messages_to_text(volume_obj.get("messages", {}).get("message"))
+        loan_status = _as_str(volume_obj.get("loanstatus")) or volume_messages or copy_messages
+        rows.append(
+            AvailabilityInfo(
+                epn=_as_str(copy_obj.get("@epn")),
+                volume_number=_as_str(volume_obj.get("@volume_number")),
+                volume_barcode=_as_str(volume_obj.get("volumebar")),
+                availability_code=_as_str(volume_obj.get("availability") or copy_obj.get("availability")),
+                location=_as_str(copy_obj.get("location")),
+                shelfmark=_as_str(copy_obj.get("shelfmark")),
+                loan_indication=_as_str(volume_obj.get("loanindication") or copy_obj.get("loanindication")),
+                loan_status=loan_status,
+                description=_as_str(volume_obj.get("description") or copy_obj.get("description")),
+                action_description=_as_str(volume_obj.get("actionDescription") or copy_obj.get("actionDescription")),
+                action_url=_as_str(volume_obj.get("actionurl") or copy_obj.get("actionurl")),
+            )
+        )
+    return rows
+
+
+def _messages_to_text(messages_raw: Any) -> str | None:
+    if isinstance(messages_raw, list):
+        return " | ".join(str(m) for m in messages_raw)
+    if messages_raw is None:
+        return None
+    return str(messages_raw)
+
+
 def serialize_books_for_tool(books: list[BookRecord]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for b in books:
@@ -285,10 +300,30 @@ def serialize_books_for_tool(books: list[BookRecord]) -> list[dict[str, Any]]:
                 "library_sigel": b.library_sigel,
                 "local_shelfmark": b.local_shelfmark,
                 "media_number": b.media_number,
+                "availability_copies": [
+                    {
+                        "epn": copy.epn,
+                        "volume_number": copy.volume_number,
+                        "volume_barcode": copy.volume_barcode,
+                        "availability_code": copy.availability_code,
+                        "location": copy.location,
+                        "shelfmark": copy.shelfmark,
+                        "loan_indication": copy.loan_indication,
+                        "loan_status": copy.loan_status,
+                        "description": copy.description,
+                        "action_description": copy.action_description,
+                        "action_url": copy.action_url,
+                    }
+                    for copy in b.availability_copies
+                ],
                 "availability": (
                     None
                     if not b.availability
                     else {
+                        "epn": b.availability.epn,
+                        "volume_number": b.availability.volume_number,
+                        "volume_barcode": b.availability.volume_barcode,
+                        "availability_code": b.availability.availability_code,
                         "location": b.availability.location,
                         "shelfmark": b.availability.shelfmark,
                         "loan_indication": b.availability.loan_indication,

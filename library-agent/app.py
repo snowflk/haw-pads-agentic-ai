@@ -27,20 +27,37 @@ def render_books(books: list[BookRecord]) -> None:
     st.subheader("Book Results")
     rows = []
     for b in books:
-        rows.append(
-            {
-                "Title": b.display_title,
-                "Author(s)": ", ".join(b.authors) if b.authors else (b.responsibility or ""),
-                "Year": b.year or "",
-                "Location": b.availability.location if b.availability and b.availability.location else "",
-                "Shelfmark": b.availability.shelfmark
-                if b.availability and b.availability.shelfmark
-                else (b.local_shelfmark or ""),
-                "Availability": b.availability.loan_status if b.availability else "",
-                "Loan Type": b.availability.loan_indication if b.availability else "",
-                "PPN": b.ppn,
-            }
-        )
+        copies = b.availability_copies or ([b.availability] if b.availability else [])
+        if not copies:
+            rows.append(
+                {
+                    "Title": b.display_title,
+                    "Author(s)": ", ".join(b.authors) if b.authors else (b.responsibility or ""),
+                    "Year": b.year or "",
+                    "Location": "",
+                    "Shelfmark": b.local_shelfmark or "",
+                    "Availability": "",
+                    "Loan Type": "",
+                    "Copy": "",
+                    "PPN": b.ppn,
+                }
+            )
+            continue
+
+        for idx, copy in enumerate(copies, start=1):
+            rows.append(
+                {
+                    "Title": b.display_title,
+                    "Author(s)": ", ".join(b.authors) if b.authors else (b.responsibility or ""),
+                    "Year": b.year or "",
+                    "Location": copy.location or "",
+                    "Shelfmark": copy.shelfmark or b.local_shelfmark or "",
+                    "Availability": copy.loan_status or copy.description or "",
+                    "Loan Type": copy.loan_indication or "",
+                    "Copy": copy.volume_barcode or copy.volume_number or copy.epn or str(idx),
+                    "PPN": b.ppn,
+                }
+            )
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
 

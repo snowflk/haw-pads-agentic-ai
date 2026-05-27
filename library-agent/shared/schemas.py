@@ -4,6 +4,10 @@ from pydantic import BaseModel, Field
 
 
 class AvailabilityInfo(BaseModel):
+    epn: str | None = None
+    volume_number: str | None = None
+    volume_barcode: str | None = None
+    availability_code: str | None = None
     location: str | None = None
     shelfmark: str | None = None
     loan_indication: str | None = None
@@ -26,6 +30,7 @@ class BookRecord(BaseModel):
     local_shelfmark: str | None = None
     media_number: str | None = None
     availability: AvailabilityInfo | None = None
+    availability_copies: list[AvailabilityInfo] = Field(default_factory=list)
 
     @property
     def display_title(self) -> str:
