@@ -14,8 +14,13 @@ Good exercise target: create an agent for a different university service, confer
 
 ## Some useful APIs
 Recipe: https://www.themealdb.com/api.php
+
 Weather: https://brightsky.dev/docs/#/#quickstart
+
 E-Commerce: https://fakestoreapi.com/
+
 Quiz: https://opentdb.com/api_config.php
+
 Pokemon: https://pokeapi.co/docs/v2#pokemon
+
 Random advice: https://api.adviceslip.com/
