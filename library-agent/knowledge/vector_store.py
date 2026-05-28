@@ -5,7 +5,7 @@ import math
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import chromadb
 from dotenv import load_dotenv
@@ -36,7 +36,7 @@ class LibraryVectorStore:
             )
 
         chunks: list[str] = []
-        metadatas: list[dict[str, Any]] = []
+        metadatas: list[dict[str, str | int]] = []
         ids: list[str] = []
         for file in files:
             text = file.read_text(encoding="utf-8")
@@ -53,7 +53,12 @@ class LibraryVectorStore:
             raise RuntimeError("No chunks produced from corpus.")
 
         embeddings = embed_texts(chunks, model=EMBED_MODEL, client=self._openai)
-        self.collection.add(ids=ids, documents=chunks, metadatas=metadatas, embeddings=embeddings)
+        self.collection.add(
+            ids=ids,
+            documents=chunks,
+            metadatas=cast(Any, metadatas),
+            embeddings=cast(Any, embeddings),
+        )
         return len(chunks)
 
     def query(self, question: str, top_k: int = 3) -> list[dict[str, Any]]:

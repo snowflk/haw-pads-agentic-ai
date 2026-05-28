@@ -6,6 +6,7 @@ from typing import Any
 
 from agents import Agent as SdkAgent
 from agents import Runner, function_tool
+from agents.items import TResponseInputItem
 from pydantic import BaseModel, Field, ValidationError
 
 from knowledge.vector_store import TemplateVectorStore
@@ -54,7 +55,7 @@ class TemplateAgent:
         self._max_results = 5
         self._agent = self._build_agent()
 
-    def run(self, messages: list[dict[str, str]], max_results: int = 5) -> AgentResult:
+    def run(self, messages: list[TResponseInputItem], max_results: int = 5) -> AgentResult:
         self._latest_records = []
         self._runtime_traces = []
         self._max_results = max(1, min(max_results, 20))

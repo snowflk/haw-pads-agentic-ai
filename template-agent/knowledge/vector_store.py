@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Any, cast
 
 import chromadb
 from dotenv import load_dotenv
@@ -39,13 +40,13 @@ class TemplateVectorStore:
 
         ids = [_chunk_id(chunk.source, idx) for idx, chunk in enumerate(chunks)]
         embeddings = self._embed([chunk.text for chunk in chunks])
-        metadatas = [{"source": chunk.source, **chunk.metadata} for chunk in chunks]
+        metadatas: list[dict[str, str]] = [{"source": chunk.source, **chunk.metadata} for chunk in chunks]
 
         self.collection.upsert(
             ids=ids,
             documents=[chunk.text for chunk in chunks],
-            embeddings=embeddings,
-            metadatas=metadatas,
+            embeddings=cast(Any, embeddings),
+            metadatas=cast(Any, metadatas),
         )
         return len(chunks)
 
@@ -57,9 +58,12 @@ class TemplateVectorStore:
             include=["documents", "metadatas", "distances"],
         )
 
-        documents = result.get("documents", [[]])[0]
-        metadatas = result.get("metadatas", [[]])[0]
-        distances = result.get("distances", [[]])[0]
+        documents_result = cast(list[list[str]], result.get("documents") or [[]])
+        metadatas_result = cast(list[list[dict[str, object] | None]], result.get("metadatas") or [[]])
+        distances_result = cast(list[list[float | None]], result.get("distances") or [[]])
+        documents = documents_result[0] if documents_result else []
+        metadatas = metadatas_result[0] if metadatas_result else []
+        distances = distances_result[0] if distances_result else []
 
         chunks: list[KnowledgeChunk] = []
         for text, metadata, distance in zip(documents, metadatas, distances):

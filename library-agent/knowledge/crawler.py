@@ -71,7 +71,7 @@ def fetch_page(url: str) -> str | None:
 def extract_links(soup: BeautifulSoup, base_url: str) -> Iterable[str]:
     for a in soup.find_all("a", href=True):
         href = a.get("href")
-        if not href:
+        if not isinstance(href, str) or not href:
             continue
         absolute = normalize_url(urljoin(base_url, href))
         if absolute:

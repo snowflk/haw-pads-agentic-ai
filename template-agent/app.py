@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from typing import Literal, cast
+
 import streamlit as st
+from agents.items import TResponseInputItem
 from dotenv import load_dotenv
+from openai.types.responses.easy_input_message_param import EasyInputMessageParam
 
 from knowledge.vector_store import TemplateVectorStore
 from model.llm import DEFAULT_MODEL
@@ -9,6 +13,8 @@ from orchestration.agent import TemplateAgent
 from shared.schemas import DomainRecord
 
 load_dotenv(override=True)
+
+AgentMessageRole = Literal["user", "assistant"]
 
 
 @st.cache_resource
@@ -23,14 +29,14 @@ def render_records(records: list[DomainRecord]) -> None:
     st.dataframe([record.model_dump() for record in records], use_container_width=True, hide_index=True)
 
 
-def build_agent_messages(chat_messages: list[dict[str, object]]) -> list[dict[str, str]]:
+def build_agent_messages(chat_messages: list[dict[str, object]]) -> list[TResponseInputItem]:
     """Convert Streamlit chat state into agent input messages."""
-    output: list[dict[str, str]] = []
+    output: list[TResponseInputItem] = []
     for msg in chat_messages:
         role = msg.get("role")
         content = msg.get("content")
         if role in {"user", "assistant"} and isinstance(content, str):
-            output.append({"role": role, "content": content})
+            output.append(EasyInputMessageParam(role=cast(AgentMessageRole, role), content=content))
     return output
 
 

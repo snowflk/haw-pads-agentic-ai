@@ -1,0 +1,6 @@
+{
+  "venvPath": "../library-agent",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportUnusedCallResult": "none"
+}

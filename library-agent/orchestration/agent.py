@@ -6,6 +6,7 @@ from typing import Any
 
 from agents import Agent as SdkAgent
 from agents import Runner, function_tool
+from agents.items import TResponseInputItem
 from knowledge.vector_store import LibraryVectorStore
 from model.llm import SYSTEM_PROMPT
 from pydantic import BaseModel, Field, ValidationError
@@ -48,24 +49,6 @@ class LibraryAgent:
         self._runtime_traces: list[AgentTrace] = []
         self._max_book_results = 5
         self._agent = self._build_agent()
-
-    def run(
-        self, messages: list[dict[str, str]], max_book_results: int = 5
-    ) -> AgentResult:
-        self._latest_books = []
-        self._runtime_traces = []
-        self._max_book_results = max(1, min(max_book_results, 20))
-
-        run_result = Runner.run_sync(self._agent, messages)
-        final_output = run_result.final_output
-        if isinstance(final_output, str):
-            answer = final_output
-        else:
-            answer = json.dumps(final_output, ensure_ascii=False, indent=2)
-
-        return AgentResult(
-            answer=answer, books=self._latest_books, traces=list(self._runtime_traces)
-        )
 
     def _build_agent(self) -> SdkAgent:
         @function_tool
@@ -181,4 +164,22 @@ class LibraryAgent:
             model=self.model,
             instructions=SYSTEM_PROMPT,
             tools=[search_haw_books_tool, lookup_library_info_tool],
+        )
+
+    def run(
+        self, messages: list[TResponseInputItem], max_book_results: int = 5
+    ) -> AgentResult:
+        self._latest_books = []
+        self._runtime_traces = []
+        self._max_book_results = max(1, min(max_book_results, 20))
+
+        run_result = Runner.run_sync(self._agent, messages)
+        final_output = run_result.final_output
+        if isinstance(final_output, str):
+            answer = final_output
+        else:
+            answer = json.dumps(final_output, ensure_ascii=False, indent=2)
+
+        return AgentResult(
+            answer=answer, books=self._latest_books, traces=list(self._runtime_traces)
         )

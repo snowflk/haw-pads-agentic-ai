@@ -1,15 +1,19 @@
 from __future__ import annotations
 from pathlib import Path
+from typing import Literal, cast
 
 import streamlit as st
+from agents.items import TResponseInputItem
 from dotenv import load_dotenv
+from openai.types.responses.easy_input_message_param import EasyInputMessageParam
 
 from knowledge.vector_store import LibraryVectorStore
 from model.llm import DEFAULT_MODEL
 from orchestration.agent import LibraryAgent
-from shared.schemas import BookRecord
 
 load_dotenv(override=True)
+
+AgentMessageRole = Literal["user", "assistant"]
 
 APP_DIR = Path(__file__).resolve().parent
 CORPUS_PATH = APP_DIR / "data" / "corpus"
@@ -20,55 +24,14 @@ def get_vector_store() -> LibraryVectorStore:
     return LibraryVectorStore()
 
 
-def render_books(books: list[BookRecord]) -> None:
-    if not books:
-        return
-
-    st.subheader("Book Results")
-    rows = []
-    for b in books:
-        copies = b.availability_copies or ([b.availability] if b.availability else [])
-        if not copies:
-            rows.append(
-                {
-                    "Title": b.display_title,
-                    "Author(s)": ", ".join(b.authors) if b.authors else (b.responsibility or ""),
-                    "Year": b.year or "",
-                    "Location": "",
-                    "Shelfmark": b.local_shelfmark or "",
-                    "Availability": "",
-                    "Loan Type": "",
-                    "Copy": "",
-                    "PPN": b.ppn,
-                }
-            )
-            continue
-
-        for idx, copy in enumerate(copies, start=1):
-            rows.append(
-                {
-                    "Title": b.display_title,
-                    "Author(s)": ", ".join(b.authors) if b.authors else (b.responsibility or ""),
-                    "Year": b.year or "",
-                    "Location": copy.location or "",
-                    "Shelfmark": copy.shelfmark or b.local_shelfmark or "",
-                    "Availability": copy.loan_status or copy.description or "",
-                    "Loan Type": copy.loan_indication or "",
-                    "Copy": copy.volume_barcode or copy.volume_number or copy.epn or str(idx),
-                    "PPN": b.ppn,
-                }
-            )
-    st.dataframe(rows, use_container_width=True, hide_index=True)
-
-
-def build_agent_messages(chat_messages: list[dict[str, object]]) -> list[dict[str, str]]:
+def build_agent_messages(chat_messages: list[dict[str, object]]) -> list[TResponseInputItem]:
     """Convert Streamlit chat state into OpenAI Agents input messages."""
-    output: list[dict[str, str]] = []
+    output: list[TResponseInputItem] = []
     for msg in chat_messages:
         role = msg.get("role")
         content = msg.get("content")
         if role in {"user", "assistant"} and isinstance(content, str):
-            output.append({"role": role, "content": content})
+            output.append(EasyInputMessageParam(role=cast(AgentMessageRole, role), content=content))
     return output
 
 
@@ -96,8 +59,6 @@ def main() -> None:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            if msg["role"] == "assistant" and msg.get("books"):
-                render_books(msg["books"])
             if msg["role"] == "assistant" and show_tool_traces and msg.get("traces"):
                 with st.expander("Tool traces"):
                     for idx, trace in enumerate(msg["traces"], start=1):
@@ -117,7 +78,6 @@ def main() -> None:
             agent = LibraryAgent(model=model, vector_store=get_vector_store())
             result = agent.run(build_agent_messages(st.session_state.messages), max_book_results=max_results)
             st.markdown(result.answer)
-            render_books(result.books)
             if show_tool_traces and result.traces:
                 with st.expander("Tool traces"):
                     for idx, trace in enumerate(result.traces, start=1):
